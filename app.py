@@ -50,7 +50,7 @@ st.title("🔑 GitHub Leaked Key Scanner")
 st.sidebar.header("Settings")
 
 github_token = st.sidebar.text_input("GitHub API Token", type="password")
-search_queries = st.sidebar.text_input("Search Queries (comma-separated)", "private key")
+search_queries = st.sidebar.text_input("Search Queries (comma-separated)", "0x, 5K, private key")
 num_results = st.sidebar.slider("Max Results", 5, 100, 10)
 scan_button = st.sidebar.button("Scan GitHub")
 
@@ -61,15 +61,16 @@ if scan_button and github_token:
     for query in queries:
         st.info(f"Scanning GitHub for '{query}'...")
         results = search_github(query, github_token, num_results)
+        
         for item in results:
             repo_name = item["repository"]["full_name"]
             file_path = item["path"]
             file_url = item["html_url"]
-            raw_url = f"https://raw.githubusercontent.com/{repo_name}/main/{file_path}"
+            download_url = item["download_url"]  # Use download_url directly
             
-            st.write(f"Fetching raw code from: {raw_url}")
+            st.write(f"Fetching raw code from: {download_url}")
             try:
-                raw_code = requests.get(raw_url).text
+                raw_code = requests.get(download_url).text
                 evm_keys, sol_keys = extract_keys_from_code(raw_code)
                 
                 for key in evm_keys:
