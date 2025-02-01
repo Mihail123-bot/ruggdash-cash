@@ -9,11 +9,18 @@ from eth_utils import decode_hex
 # GitHub API settings
 GITHUB_API_URL = "https://api.github.com/search/code"
 REPO_API_URL = "https://api.github.com/repos"
+USER_API_URL = "https://api.github.com/user"  # Endpoint for user details
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 # Improved Regex patterns for valid private keys
 EVM_KEY_PATTERN = r'(?<![a-fA-F0-9])0x[a-fA-F0-9]{64}(?![a-fA-F0-9])'
 SOL_KEY_PATTERN = r'(?<![A-Za-z0-9])[5KLMN][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])'
+
+# Function to validate GitHub API token
+def validate_github_token(token):
+    HEADERS["Authorization"] = f"token {token}"
+    response = requests.get(USER_API_URL, headers=HEADERS)
+    return response.status_code == 200  # True if token is valid, False otherwise
 
 # Function to search GitHub for repositories containing the search keyword
 def search_github(query, token, max_results=10):
@@ -72,35 +79,39 @@ searched_repos = set()
 # Display results
 data = []
 if scan_button and github_token:
-    st.info("Scanning GitHub for leaked keys...")
-    results = search_github(search_keyword, github_token, num_results)
-    
-    for item in results:
-        repo_name = item["repository"]["full_name"]
-        if repo_name in searched_repos:
-            continue  # Skip already searched repositories
+    # Validate the GitHub API token
+    if not validate_github_token(github_token):
+        st.error("Invalid GitHub API Token. Please check and try again.")
+    else:
+        st.info("Scanning GitHub for leaked keys...")
+        results = search_github(search_keyword, github_token, num_results)
         
-        searched_repos.add(repo_name)  # Mark as searched
-        st.write(f"Scanning repository: {repo_name}")
-        
-        # Get all files in the repository
-        files = get_repo_files(repo_name, github_token)
-        
-        for file in files:
-            if file['type'] == 'file':  # Only process files
-                raw_url = file['download_url']  # Direct link to raw file
-                try:
-                    raw_code = requests.get(raw_url).text
-                    evm_keys, sol_keys = extract_keys_from_code(raw_code)
-                    
-                    for key in evm_keys:
-                        if is_valid_eth_key(key):
-                            data.append([repo_name, file['html_url'], "Ethereum", key])
-                    for key in sol_keys:
-                        if is_valid_solana_key(key):
-                            data.append([repo_name, file['html_url'], "Solana", key])
-                except Exception as e:
-                    st.error(f"Error fetching code from {raw_url}: {e}")
+        for item in results:
+            repo_name = item["repository"]["full_name"]
+            if repo_name in searched_repos:
+                continue  # Skip already searched repositories
+            
+            searched_repos.add(repo_name)  # Mark as searched
+            st.write(f"Scanning repository: {repo_name}")
+            
+            # Get all files in the repository
+            files = get_repo_files(repo_name, github_token)
+            
+            for file in files:
+                if file['type'] == 'file':  # Only process files
+                    raw_url = file['download_url']  # Direct link to raw file
+                    try:
+                        raw_code = requests.get(raw_url).text
+                        evm_keys, sol_keys = extract_keys_from_code(raw_code)
+                        
+                        for key in evm_keys:
+                            if is_valid_eth_key(key):
+                                data.append([repo_name, file['html_url'], "Ethereum", key])
+                        for key in sol_keys:
+                            if is_valid_solana_key(key):
+                                data.append([repo_name, file['html_url'], "Solana", key])
+                    except Exception as e:
+                        st.error(f"Error fetching code from {raw_url}: {e}")
 
 # Convert to DataFrame
 if data:
