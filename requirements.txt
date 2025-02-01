@@ -4,3 +4,4 @@ pandas
 base58
 eth-keys
 eth-utils
+web3
