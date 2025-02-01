@@ -14,12 +14,6 @@ HEADERS = {"Accept": "application/vnd.github.v3+json"}
 EVM_KEY_PATTERN = r'(?<![a-fA-F0-9])0x[a-fA-F0-9]{64}(?![a-fA-F0-9])'  # Ethereum private keys
 SOL_KEY_PATTERN = r'(?<![A-Za-z0-9])[5KLMN][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])'  # Solana private keys
 
-# Function to validate GitHub API token
-def validate_github_token(token):
-    HEADERS["Authorization"] = f"token {token}"
-    response = requests.get("https://api.github.com/user", headers=HEADERS)
-    return response.status_code == 200
-
 # Function to search GitHub for leaked keys
 def search_github(query, token, max_results=50):
     HEADERS["Authorization"] = f"token {token}"
@@ -56,16 +50,9 @@ st.title("🔑 GitHub Leaked Key Scanner")
 st.sidebar.header("Settings")
 
 github_token = st.sidebar.text_input("GitHub API Token", type="password")
-search_queries = st.sidebar.text_input("Search Queries (comma-separated)", "private key, eth private key, token")
-num_results = st.sidebar.slider("Max Results", 5, 100, 50)
+search_queries = st.sidebar.text_input("Search Queries (comma-separated)", "private key")
+num_results = st.sidebar.slider("Max Results", 5, 50, 10)
 scan_button = st.sidebar.button("Scan GitHub")
-
-# Check token validity
-if github_token and st.sidebar.button("Validate Token"):
-    if validate_github_token(github_token):
-        st.success("GitHub API Token is valid!")
-    else:
-        st.error("Invalid GitHub API Token. Please check your token.")
 
 # Display results
 data = []
@@ -76,8 +63,10 @@ if scan_button and github_token:
         results = search_github(query, github_token, num_results)
         for item in results:
             repo_name = item["repository"]["full_name"]
+            file_path = item["path"]
             file_url = item["html_url"]
-            raw_url = item["download_url"]  # Updated to use download_url for raw content
+            # Constructing the raw URL from the repository and file path
+            raw_url = f"https://raw.githubusercontent.com/{repo_name}/main/{file_path}"  # Adjust branch if necessary
             
             # Fetch raw code
             try:
@@ -97,4 +86,4 @@ if data:
     st.write(df)
     st.download_button("Download as CSV", df.to_csv(index=False), "leaked_keys.csv", "text/csv")
 else:
-    st.warning("No valid leaked keys found. Try adjusting the search queries!")
+    st.warning("No valid leaked keys found. Try adjusting the search query!")
