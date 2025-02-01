@@ -63,37 +63,12 @@ def get_raw_file_content(repo_name, path, token):
 
 # Streamlit UI
 st.set_page_config(page_title="🔑 GitHub Leaked Key Scanner", layout="wide")
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #f4f4f4;
-        font-family: Arial, sans-serif;
-    }
-    h1 {
-        color: #2C3E50;
-    }
-    .sidebar {
-        background-color: #34495E;
-        color: white;
-    }
-    .stButton>button {
-        background-color: #2980B9;
-        color: white;
-        border-radius: 5px;
-        padding: 10px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 st.title("🔑 GitHub Leaked Key Scanner")
 st.sidebar.header("Settings")
 
 github_token = st.sidebar.text_input("GitHub API Token", type="password")
-search_keyword = st.sidebar.text_input("Search Query", "private key")
-num_results = st.sidebar.slider("Max Results", 5, 100, 10)
+search_keywords = st.sidebar.text_area("Search Queries (comma-separated)", "private key")
+num_results = st.sidebar.slider("Max Results per Query", 5, 100, 10)
 scan_button = st.sidebar.button("Scan GitHub")
 
 # Validate the GitHub API token immediately
@@ -112,43 +87,45 @@ data = []
 if scan_button and github_token:
     st.info("Scanning GitHub for leaked keys...")
     with st.spinner("Searching..."):
-        page = 1
-        while True:
-            results = search_github(search_keyword, github_token, num_results, page)
-            if not results:
-                break  # Exit loop if no more results
-            
-            for item in results:
-                repo_name = item["repository"]["full_name"]
-                path = item["path"]  # Get the path of the file
-                if repo_name in st.session_state.searched_repos:
-                    continue  # Skip already searched repositories
+        for search_keyword in search_keywords.split(","):
+            search_keyword = search_keyword.strip()  # Clean up the keyword
+            page = 1
+            while True:
+                results = search_github(search_keyword, github_token, num_results, page)
+                if not results:
+                    break  # Exit loop if no more results
                 
-                st.session_state.searched_repos.add(repo_name)  # Mark as searched
-                st.write(f"Scanning repository: {repo_name}")
+                for item in results:
+                    repo_name = item["repository"]["full_name"]
+                    path = item["path"]
+                    if repo_name in st.session_state.searched_repos:
+                        continue  # Skip already searched repositories
+                    
+                    st.session_state.searched_repos.add(repo_name)  # Mark as searched
+                    st.write(f"Scanning repository: {repo_name}")
 
-                # Get the raw file content for the found code
-                raw_code = get_raw_file_content(repo_name, path, github_token)
-                evm_keys, sol_keys = extract_keys_from_code(raw_code)
+                    # Get the raw file content for the found code
+                    raw_code = get_raw_file_content(repo_name, path, github_token)
+                    evm_keys, sol_keys = extract_keys_from_code(raw_code)
+
+                    # Check for valid keys
+                    for key in evm_keys:
+                        if is_valid_eth_key(key):
+                            data.append([repo_name, item["html_url"], "Ethereum", key])
+                            st.success(f"Found valid Ethereum key: {key}")
+                            break  # Stop searching upon finding a valid key
+                    if data:  # If a valid key has been found, exit the loop
+                        break
+                    
+                    for key in sol_keys:
+                        if is_valid_solana_key(key):
+                            data.append([repo_name, item["html_url"], "Solana", key])
+                            st.success(f"Found valid Solana key: {key}")
+                            break  # Stop searching upon finding a valid key
+                    if data:  # If a valid key has been found, exit the loop
+                        break
                 
-                # Check for valid keys
-                for key in evm_keys:
-                    if is_valid_eth_key(key):
-                        data.append([repo_name, item["html_url"], "Ethereum", key])
-                        st.success(f"Found valid Ethereum key: {key}")
-                        break  # Stop searching upon finding a valid key
-                if data:  # If a valid key has been found, exit the loop
-                    break
-                
-                for key in sol_keys:
-                    if is_valid_solana_key(key):
-                        data.append([repo_name, item["html_url"], "Solana", key])
-                        st.success(f"Found valid Solana key: {key}")
-                        break  # Stop searching upon finding a valid key
-                if data:  # If a valid key has been found, exit the loop
-                    break
-            
-            page += 1  # Go to the next page of results
+                page += 1  # Go to the next page of results
 
 # Convert to DataFrame
 if data:
