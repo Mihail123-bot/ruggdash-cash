@@ -11,8 +11,8 @@ GITHUB_API_URL = "https://api.github.com/search/code"
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 # Improved Regex patterns for valid private keys
-EVM_KEY_PATTERN = r'(?<![a-fA-F0-9])0x[a-fA-F0-9]{64}(?![a-fA-F0-9])'  # Ethereum private keys
-SOL_KEY_PATTERN = r'(?<![A-Za-z0-9])[5KLMN][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])'  # Solana private keys
+EVM_KEY_PATTERN = r'(?<![a-fA-F0-9])0x[a-fA-F0-9]{64}(?![a-fA-F0-9])|(?:private\s*key|secret)[\s:]*([0-9a-fA-F]{64})'
+SOL_KEY_PATTERN = r'(?<![A-Za-z0-9])[5KLMN][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])|(?:private\s*key|secret)[\s:]*([A-Za-z0-9]+)'
 
 # Function to search GitHub for leaked keys
 def search_github(query, token, max_results=10):
@@ -21,6 +21,8 @@ def search_github(query, token, max_results=10):
     response = requests.get(GITHUB_API_URL, headers=HEADERS, params=params)
     if response.status_code == 200:
         return response.json().get("items", [])
+    else:
+        st.error(f"Error: {response.status_code} - {response.json().get('message')}")
     return []
 
 # Function to extract keys from code snippets
@@ -74,6 +76,7 @@ if scan_button and github_token:
             
             # Debugging output
             st.write(f"Checking repository: {repo_name} in file: {file_url}")
+            st.write(f"Raw code length: {len(raw_code)} characters.")
             
             for key in evm_keys:
                 data.append([repo_name, file_url, "Ethereum", key])
