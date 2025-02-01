@@ -5,7 +5,6 @@ import pandas as pd
 import base58
 from eth_keys import keys
 from eth_utils import decode_hex
-from solana.keypair import Keypair
 from datetime import datetime
 
 # GitHub API settings
@@ -43,7 +42,7 @@ def is_valid_eth_key(key):
 def is_valid_solana_key(key):
     try:
         decoded_key = base58.b58decode(key)
-        return len(decoded_key) == 32  # Solana private keys must be 32 bytes
+        return len(decoded_key) in [32, 64]  # Solana private keys are typically 32 or 64 bytes
     except:
         return False
 
