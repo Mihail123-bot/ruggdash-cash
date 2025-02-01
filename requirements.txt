@@ -1,8 +1,8 @@
-streamlit>=1.24.0
-requests>=2.31.0
-pandas>=2.0.3
-eth-keys>=0.4.0
-eth-utils>=2.1.0
-solana>=0.29.2
-base58>=2.1.1
-python-dotenv>=1.0.0
+streamlit
+requests
+pandas
+eth-keys
+eth-utils
+solana
+base58
+python-dotenv
