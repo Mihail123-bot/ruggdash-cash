@@ -5,7 +5,6 @@ import pandas as pd
 import base58
 from eth_keys import keys
 from eth_utils import decode_hex
-from datetime import datetime
 
 # GitHub API settings
 GITHUB_API_URL = "https://api.github.com/search/code"
@@ -35,7 +34,7 @@ def is_valid_eth_key(key):
     try:
         priv_key = keys.PrivateKey(decode_hex(key[2:]))  # Remove '0x' before decoding
         return True
-    except:
+    except Exception:
         return False
 
 # Validate Solana private key
@@ -43,7 +42,7 @@ def is_valid_solana_key(key):
     try:
         decoded_key = base58.b58decode(key)
         return len(decoded_key) in [32, 64]  # Solana private keys are typically 32 or 64 bytes
-    except:
+    except Exception:
         return False
 
 # Streamlit UI
@@ -60,19 +59,28 @@ data = []
 if scan_button and github_token:
     st.info("Scanning GitHub for leaked keys...")
     results = search_github(search_keyword, github_token, num_results)
+    
+    st.write(f"Found {len(results)} repositories matching your search.")
+    
     for item in results:
         repo_name = item["repository"]["full_name"]
         file_url = item["html_url"]
         raw_url = item["git_url"].replace("git://", "https://raw.githubusercontent.com/").replace("/blob/", "/")
         
         # Fetch raw code
-        raw_code = requests.get(raw_url).text
-        evm_keys, sol_keys = extract_keys_from_code(raw_code)
-        
-        for key in evm_keys:
-            data.append([repo_name, file_url, "Ethereum", key])
-        for key in sol_keys:
-            data.append([repo_name, file_url, "Solana", key])
+        try:
+            raw_code = requests.get(raw_url).text
+            evm_keys, sol_keys = extract_keys_from_code(raw_code)
+            
+            # Debugging output
+            st.write(f"Checking repository: {repo_name} in file: {file_url}")
+            
+            for key in evm_keys:
+                data.append([repo_name, file_url, "Ethereum", key])
+            for key in sol_keys:
+                data.append([repo_name, file_url, "Solana", key])
+        except Exception as e:
+            st.error(f"Error fetching code from {raw_url}: {e}")
 
 # Convert to DataFrame
 if data:
