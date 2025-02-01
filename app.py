@@ -66,8 +66,13 @@ if scan_button and github_token:
             repo_name = item["repository"]["full_name"]
             file_path = item["path"]
             file_url = item["html_url"]
-            download_url = item["download_url"]  # Use download_url directly
-            
+            download_url = item.get("download_url")  # Fix KeyError by using .get()
+
+            # If download_url is missing, try constructing raw URL
+            if not download_url:
+                default_branch = item["repository"].get("default_branch", "main")
+                download_url = f"https://raw.githubusercontent.com/{repo_name}/{default_branch}/{file_path}"
+
             st.write(f"Fetching raw code from: {download_url}")
             try:
                 raw_code = requests.get(download_url).text
