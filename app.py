@@ -73,8 +73,9 @@ search_keyword = st.sidebar.text_input("Search Query", "private key")
 num_results = st.sidebar.slider("Max Results", 5, 50, 10)
 scan_button = st.sidebar.button("Scan GitHub")
 
-# Track searched repositories
-searched_repos = set()
+# Initialize session state for searched repositories
+if 'searched_repos' not in st.session_state:
+    st.session_state.searched_repos = set()
 
 # Display results
 data = []
@@ -88,10 +89,10 @@ if scan_button and github_token:
         
         for item in results:
             repo_name = item["repository"]["full_name"]
-            if repo_name in searched_repos:
+            if repo_name in st.session_state.searched_repos:
                 continue  # Skip already searched repositories
             
-            searched_repos.add(repo_name)  # Mark as searched
+            st.session_state.searched_repos.add(repo_name)  # Mark as searched
             st.write(f"Scanning repository: {repo_name}")
             
             # Get all files in the repository
