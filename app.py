@@ -5,8 +5,6 @@ import pandas as pd
 import base58
 from eth_keys import keys
 from eth_utils import decode_hex
-from datetime import datetime
-import time
 
 # GitHub API settings
 GITHUB_API_URL = "https://api.github.com/search/repositories"
@@ -21,6 +19,21 @@ CRYPTO_PATTERNS = {
     "Wallet JSON": r'\{.*("crypto"|"wallet"|"address"|"privateKey").*\}'  # JSON format
 }
 
+# Function to validate Ethereum private key
+def is_valid_ethereum_private_key(private_key):
+    try:
+        key = keys.PrivateKey(decode_hex(private_key))
+        return True
+    except Exception:
+        return False
+
+# Function to validate Solana private key
+def is_valid_solana_private_key(private_key):
+    try:
+        decoded_key = base58.b58decode(private_key)
+        return len(decoded_key) == 32  # Solana private keys are typically 32 bytes
+    except Exception:
+        return False
 
 # Function to check GitHub API token validity
 def check_github_token(token):
@@ -75,9 +88,15 @@ def scan_repository(repo_name, repo_url, token):
                 
                 for key_type, keys in found_keys.items():
                     for key in keys:
-                        data.append([repo_name, raw_url, key_type, key])
-                        st.sidebar.write(f"🔑 Found {key_type} key in {repo_name}")
-                        return data  # Stop scanning once a valid key is found
+                        # Check the validity of the key before adding it to the results
+                        if key_type == "Ethereum" and is_valid_ethereum_private_key(key):
+                            data.append([repo_name, raw_url, key_type, key])
+                            st.sidebar.write(f"🔑 Found valid {key_type} key in {repo_name}")
+                            return data  # Stop scanning once a valid key is found
+                        elif key_type == "Solana" and is_valid_solana_private_key(key):
+                            data.append([repo_name, raw_url, key_type, key])
+                            st.sidebar.write(f"🔑 Found valid {key_type} key in {repo_name}")
+                            return data  # Stop scanning once a valid key is found
             except:
                 continue
     return data
