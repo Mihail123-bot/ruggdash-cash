@@ -7,7 +7,7 @@ from eth_keys import keys
 from eth_utils import decode_hex
 
 # GitHub API settings
-GITHUB_API_URL = "https://mainnet.infura.io/v3/6e34ed8d853f4abb83516b5a3a51df0c"
+GITHUB_API_URL = "https://api.github.com/search/code"
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 # Crypto private key patterns
