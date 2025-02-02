@@ -19,6 +19,11 @@ CRYPTO_PATTERNS = {
     "Solana": r'[5KLMN][1-9A-HJ-NP-Za-km-z]{51,52}',
     "Seed Phrase": r'\b(?:[a-z]{3,8}\s){11,23}[a-z]{3,8}\b',
 }
+# Check GitHub API token validity
+def check_github_token(token):
+    HEADERS["Authorization"] = f"token {token}"
+    response = requests.get("https://api.github.com/user", headers=HEADERS)
+    return response.status_code == 200
 
 # Check Ethereum balance
 def get_ethereum_balance(address):
