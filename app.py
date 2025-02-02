@@ -6,6 +6,7 @@ import base58
 from eth_keys import keys
 from eth_utils import decode_hex
 from datetime import datetime
+import time
 
 # GitHub API settings
 GITHUB_API_URL = "https://api.github.com/search/repositories"
@@ -41,9 +42,19 @@ def extract_keys_from_code(code_snippet):
         found_keys[key_type] = re.findall(pattern, code_snippet)
     return found_keys
 
-# Function to scan repository files
+# Function to get the default branch of a repository
+def get_default_branch(repo_name, token):
+    url = f"https://api.github.com/repos/{repo_name}"
+    HEADERS["Authorization"] = f"token {token}"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code == 200:
+        return response.json().get("default_branch", "main")
+    return "main"
+
+# Function to scan all files in a repository
 def scan_repository(repo_name, repo_url, token):
-    files_url = f"https://api.github.com/repos/{repo_name}/git/trees/main?recursive=1"
+    branch = get_default_branch(repo_name, token)
+    files_url = f"https://api.github.com/repos/{repo_name}/git/trees/{branch}?recursive=1"
     HEADERS["Authorization"] = f"token {token}"
     response = requests.get(files_url, headers=HEADERS)
     
@@ -55,7 +66,7 @@ def scan_repository(repo_name, repo_url, token):
     
     for file in files:
         if file["type"] == "blob":
-            raw_url = f"https://raw.githubusercontent.com/{repo_name}/main/{file['path']}"
+            raw_url = f"https://raw.githubusercontent.com/{repo_name}/{branch}/{file['path']}"
             try:
                 raw_code = requests.get(raw_url).text
                 found_keys = extract_keys_from_code(raw_code)
@@ -63,6 +74,8 @@ def scan_repository(repo_name, repo_url, token):
                 for key_type, keys in found_keys.items():
                     for key in keys:
                         data.append([repo_name, raw_url, key_type, key])
+                        st.sidebar.write(f"🔑 Found {key_type} key in {repo_name}")
+                        return data  # Stop scanning once a valid key is found
             except:
                 continue
     return data
@@ -98,10 +111,12 @@ if scan_button and github_token:
                 continue
             
             scanned_repos.append(repo_name)
-            st.sidebar.write(f"Scanning: {repo_name}")
+            st.sidebar.write(f"📂 Scanning: {repo_name}")
             
             results = scan_repository(repo_name, repo_url, github_token)
-            data.extend(results)
+            if results:
+                data.extend(results)
+                break  # Stop searching after finding the first valid key
 
 if data:
     df = pd.DataFrame(data, columns=["Repository", "File URL", "Type", "Leaked Key"])
