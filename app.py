@@ -10,16 +10,16 @@ from eth_utils import decode_hex
 GITHUB_API_URL = "https://api.github.com/search/repositories"
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
-# Regex patterns for valid private keys and seed phrases
+# Regex patterns for private keys and seed phrases
 CRYPTO_PATTERNS = {
-    "Ethereum": r'0x[a-fA-F0-9]{64}',  # Strict Ethereum private key format
-    "Solana": r'[5KLMN][1-9A-HJ-NP-Za-km-z]{51,52}',  # Solana private key (base58)
+    "Ethereum": r'0x[a-fA-F0-9]{64}',  # Ethereum private key format
+    "Solana": r'[5KLMN][1-9A-HJ-NP-Za-km-z]{51,52}',  # Solana private key (Base58)
     "Bitcoin": r'[5KL][1-9A-HJ-NP-Za-km-z]{51,52}',  # Bitcoin private key
     "Seed Phrase": r'\b(?:[a-z]{3,8}\s){11,23}[a-z]{3,8}\b',  # 12-24 words
     "Wallet JSON": r'\{.*("crypto"|"wallet"|"address"|"privateKey").*\}'  # JSON format
 }
 
-# Function to validate Ethereum private key
+# Validate Ethereum private key
 def is_valid_ethereum_private_key(private_key):
     try:
         key = keys.PrivateKey(decode_hex(private_key))
@@ -27,21 +27,26 @@ def is_valid_ethereum_private_key(private_key):
     except Exception:
         return False
 
-# Function to validate Solana private key
+# Validate Solana private key
 def is_valid_solana_private_key(private_key):
     try:
         decoded_key = base58.b58decode(private_key)
-        return len(decoded_key) == 32  # Solana private keys are typically 32 bytes
+        return len(decoded_key) == 32  # Solana private keys are 32 bytes
     except Exception:
         return False
 
-# Function to check GitHub API token validity
+# Validate seed phrase (must contain at least 2 words)
+def is_valid_seed_phrase(phrase):
+    words = phrase.split()
+    return len(words) >= 2  # Ensure it's not a single word
+
+# Check GitHub API token validity
 def check_github_token(token):
     HEADERS["Authorization"] = f"token {token}"
     response = requests.get("https://api.github.com/user", headers=HEADERS)
     return response.status_code == 200
 
-# Function to search GitHub for repositories
+# Search GitHub for repositories
 def search_github_repos(query, token, max_results=5):
     HEADERS["Authorization"] = f"token {token}"
     params = {"q": query, "per_page": max_results}
@@ -50,14 +55,14 @@ def search_github_repos(query, token, max_results=5):
         return response.json().get("items", [])
     return []
 
-# Function to extract keys from code
+# Extract crypto keys and seed phrases from code
 def extract_keys_from_code(code_snippet):
     found_keys = {}
     for key_type, pattern in CRYPTO_PATTERNS.items():
         found_keys[key_type] = re.findall(pattern, code_snippet)
     return found_keys
 
-# Function to get the default branch of a repository
+# Get the default branch of a repository
 def get_default_branch(repo_name, token):
     url = f"https://api.github.com/repos/{repo_name}"
     HEADERS["Authorization"] = f"token {token}"
@@ -66,7 +71,7 @@ def get_default_branch(repo_name, token):
         return response.json().get("default_branch", "main")
     return "main"
 
-# Function to scan all files in a repository
+# Scan all files in a repository
 def scan_repository(repo_name, repo_url, token):
     branch = get_default_branch(repo_name, token)
     files_url = f"https://api.github.com/repos/{repo_name}/git/trees/{branch}?recursive=1"
@@ -88,17 +93,19 @@ def scan_repository(repo_name, repo_url, token):
                 
                 for key_type, keys in found_keys.items():
                     for key in keys:
-                        # Check the validity of the key before adding it to the results
                         if key_type == "Ethereum" and is_valid_ethereum_private_key(key):
                             data.append([repo_name, raw_url, key_type, key])
-                            st.sidebar.write(f"🔑 Found valid {key_type} key in {repo_name}")
-                            return data  # Stop scanning once a valid key is found
                         elif key_type == "Solana" and is_valid_solana_private_key(key):
                             data.append([repo_name, raw_url, key_type, key])
-                            st.sidebar.write(f"🔑 Found valid {key_type} key in {repo_name}")
-                            return data  # Stop scanning once a valid key is found
+                        elif key_type == "Seed Phrase" and is_valid_seed_phrase(key):
+                            data.append([repo_name, raw_url, key_type, key])
+
             except:
                 continue
+    
+    if data:
+        st.sidebar.write(f"🔑 Found {len(data)} leaked keys in {repo_name}!")
+    
     return data
 
 # Streamlit UI
@@ -120,7 +127,7 @@ if github_token:
 data = []
 scanned_repos = []
 if scan_button and github_token:
-    st.info("Scanning GitHub for leaked crypto keys...")
+    st.info("🔍 Scanning GitHub for leaked crypto keys...")
     queries = [q.strip() for q in search_keyword.split(",")]
     for query in queries:
         repos = search_github_repos(query, github_token, num_results)
@@ -137,12 +144,19 @@ if scan_button and github_token:
             results = scan_repository(repo_name, repo_url, github_token)
             if results:
                 data.extend(results)
-                break  # Stop searching after finding the first valid key
 
 if data:
     df = pd.DataFrame(data, columns=["Repository", "File URL", "Type", "Leaked Key"])
-    st.write(df)
-    st.download_button("Download as CSV", df.to_csv(index=False), "leaked_keys.csv", "text/csv")
+    
+    # Mask the leaked key (show only first 4 and last 4 characters)
+    df["Leaked Key (Masked)"] = df["Leaked Key"].apply(lambda x: x[:4] + "..." + x[-4:])
+    
+    st.write(df.drop(columns=["Leaked Key"]))  # Hide full key by default
+    
+    if st.button("🔓 Reveal Full Keys (Security Risk)"):
+        st.write(df)  # Show full unmasked keys
+    
+    st.download_button("⬇️ Download as CSV", df.to_csv(index=False), "leaked_keys.csv", "text/csv")
 else:
     st.warning("No valid leaked keys found. Try adjusting the search query!")
 
