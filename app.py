@@ -8,7 +8,7 @@ from eth_utils import decode_hex
 from datetime import datetime
 
 # GitHub API settings
-GITHUB_API_URL = "https://api.github.com/search/code"
+GITHUB_API_URL = "https://api.github.com/search/repositories"
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
 
 # Regex patterns for valid private keys and seed phrases
@@ -25,21 +25,47 @@ def check_github_token(token):
     response = requests.get("https://api.github.com/user", headers=HEADERS)
     return response.status_code == 200
 
-# Function to search GitHub for leaked keys
-def search_github(query, token, max_results=10):
+# Function to search GitHub for repositories
+def search_github_repos(query, token, max_results=5):
     HEADERS["Authorization"] = f"token {token}"
     params = {"q": query, "per_page": max_results}
-    response = requests.get(GITHUB_API_URL, headers=HEADERS)
+    response = requests.get(GITHUB_API_URL, headers=HEADERS, params=params)
     if response.status_code == 200:
         return response.json().get("items", [])
     return []
 
-# Function to extract keys from code snippets
+# Function to extract keys from code
 def extract_keys_from_code(code_snippet):
     found_keys = {}
     for key_type, pattern in CRYPTO_PATTERNS.items():
         found_keys[key_type] = re.findall(pattern, code_snippet)
     return found_keys
+
+# Function to scan repository files
+def scan_repository(repo_name, repo_url, token):
+    files_url = f"https://api.github.com/repos/{repo_name}/git/trees/main?recursive=1"
+    HEADERS["Authorization"] = f"token {token}"
+    response = requests.get(files_url, headers=HEADERS)
+    
+    if response.status_code != 200:
+        return []
+    
+    files = response.json().get("tree", [])
+    data = []
+    
+    for file in files:
+        if file["type"] == "blob":
+            raw_url = f"https://raw.githubusercontent.com/{repo_name}/main/{file['path']}"
+            try:
+                raw_code = requests.get(raw_url).text
+                found_keys = extract_keys_from_code(raw_code)
+                
+                for key_type, keys in found_keys.items():
+                    for key in keys:
+                        data.append([repo_name, raw_url, key_type, key])
+            except:
+                continue
+    return data
 
 # Streamlit UI
 st.title("🔑 GitHub Crypto Key & Seed Phrase Scanner")
@@ -47,7 +73,7 @@ st.sidebar.header("Settings")
 
 github_token = st.sidebar.text_input("GitHub API Token", type="password")
 search_keyword = st.sidebar.text_input("Search Queries (comma-separated)", "private key, seed phrase, wallet")
-num_results = st.sidebar.slider("Max Results", 5, 50, 10)
+num_results = st.sidebar.slider("Max Repositories", 1, 20, 5)
 scan_button = st.sidebar.button("Scan GitHub")
 
 if github_token:
@@ -63,22 +89,19 @@ if scan_button and github_token:
     st.info("Scanning GitHub for leaked crypto keys...")
     queries = [q.strip() for q in search_keyword.split(",")]
     for query in queries:
-        results = search_github(query, github_token, num_results)
-        for item in results:
-            repo_name = item["repository"]["full_name"]
-            file_url = item["html_url"]
-            raw_url = item.get("download_url")
+        repos = search_github_repos(query, github_token, num_results)
+        for repo in repos:
+            repo_name = repo["full_name"]
+            repo_url = repo["html_url"]
             
-            if not raw_url or repo_name in scanned_repos:
+            if repo_name in scanned_repos:
                 continue
-
-            scanned_repos.append(repo_name)
-            raw_code = requests.get(raw_url).text
-            found_keys = extract_keys_from_code(raw_code)
             
-            for key_type, keys in found_keys.items():
-                for key in keys:
-                    data.append([repo_name, file_url, key_type, key])
+            scanned_repos.append(repo_name)
+            st.sidebar.write(f"Scanning: {repo_name}")
+            
+            results = scan_repository(repo_name, repo_url, github_token)
+            data.extend(results)
 
 if data:
     df = pd.DataFrame(data, columns=["Repository", "File URL", "Type", "Leaked Key"])
